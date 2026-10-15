@@ -1,0 +1,3 @@
+# shell 脚本必须在 Android 上执行，强制 LF 行尾（否则 shebang/语法会被 \r 破坏）
+*.sh text eol=lf
+module.prop text eol=lf
