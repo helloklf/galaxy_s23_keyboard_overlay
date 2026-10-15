@@ -43,7 +43,7 @@ build_one gestural_nohint GesturalNoHintOverlay.apk
 
 echo "== 组装 module/（纯模块内容：module.prop + service.sh + files/）"
 PKG=module
-rm -rf "$PKG" keyboardoverlay-module.zip
+rm -rf "$PKG" s23_keyboardoverlay.zip
 mkdir -p "$PKG/files/KbdOverlay" \
          "$PKG/files/PillOverlay" \
          "$PKG/files/NavigationBarModeGestural" \
@@ -54,8 +54,8 @@ cp dist/GesturalOverlay.apk        "$PKG/files/NavigationBarModeGestural/Navigat
 cp dist/GesturalNoHintOverlay.apk  "$PKG/files/NavigationBarModeGesturalNoHint/NavigationBarModeGesturalNoHintOverlay.apk"
 cp module.prop service.sh "$PKG/"
 
-echo "== 打包 keyboardoverlay-module.zip"
-powershell -NoProfile -Command "Compress-Archive -Path '$PKG/*' -DestinationPath keyboardoverlay-module.zip -Force"
+echo "== 打包 s23_keyboardoverlay.zip"
+powershell -NoProfile -Command "Compress-Archive -Path '$PKG/*' -DestinationPath s23_keyboardoverlay.zip -Force"
 
-echo "完成: dist/ 四个 APK + keyboardoverlay-module.zip"
+echo "完成: dist/ 四个 APK + s23_keyboardoverlay.zip"
 echo "部署到手机: ./deploy.sh   （需要已连 adb 且已手动获取 root）"
