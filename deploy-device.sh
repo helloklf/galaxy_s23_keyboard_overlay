@@ -1,8 +1,12 @@
 #!/system/bin/sh
 # 设备端安装脚本（root 运行）：重建 /product/overlay 合并目录、打白名单补丁、安装标准模块文件
 # 由 PC 端 deploy.sh 推送到 /data/local/tmp/kbo/ 后执行；也可用于 OTA 后重装
-MOD=/data/adb/modules/keyboardoverlay
 PKG=/data/local/tmp/kbo
+MODID=$(grep -m1 '^id=' "$PKG/module.prop" | cut -d= -f2 | tr -d ' \r')
+MOD=/data/adb/modules/${MODID:-s23_keyboardoverlay}
+
+echo "-- 清理历史模块（旧 id）"
+[ "$MODID" != "keyboardoverlay" ] && rm -rf /data/adb/modules/keyboardoverlay
 
 echo "-- 卸载旧的 bind mount（忽略错误）"
 umount -l /product/overlay 2>/dev/null

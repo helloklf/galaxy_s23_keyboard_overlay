@@ -52,10 +52,17 @@ cp dist/KbdOverlay.apk             "$PKG/files/KbdOverlay/"
 cp dist/PillOverlay.apk            "$PKG/files/PillOverlay/"
 cp dist/GesturalOverlay.apk        "$PKG/files/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk"
 cp dist/GesturalNoHintOverlay.apk  "$PKG/files/NavigationBarModeGesturalNoHint/NavigationBarModeGesturalNoHintOverlay.apk"
-cp module.prop service.sh "$PKG/"
+cp module.prop service.sh customize.sh "$PKG/"
 
-echo "== 打包 s23_keyboardoverlay.zip"
-powershell -NoProfile -Command "Compress-Archive -Path '$PKG/*' -DestinationPath s23_keyboardoverlay.zip -Force"
+echo "== 打包 s23_keyboardoverlay.zip（zip 条目必须是正斜杠路径；PowerShell Compress-Archive 在 Windows 上会写成反斜杠导致解压塌方，故用 python）"
+python - <<'EOF'
+import os, zipfile
+with zipfile.ZipFile('s23_keyboardoverlay.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in os.walk('module'):
+        for f in files:
+            p = os.path.join(root, f)
+            z.write(p, os.path.relpath(p, 'module').replace(os.sep, '/'))
+EOF
 
 echo "完成: dist/ 四个 APK + s23_keyboardoverlay.zip"
 echo "部署到手机: ./deploy.sh   （需要已连 adb 且已手动获取 root）"

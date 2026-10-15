@@ -10,7 +10,7 @@
 
 ## 最终方案
 
-用 RRO（Runtime Resource Overlay）APK，通过 bind mount 注入 `/product/overlay`，并 bind mount 两个白名单 XML 让三星 PMS 接受注册。全部文件在设备 `/data/adb/modules/keyboardoverlay/`（仅作存储，越狱模式 KernelSU 不会自动挂载模块）。
+用 RRO（Runtime Resource Overlay）APK，通过 bind mount 注入 `/product/overlay`，并 bind mount 两个白名单 XML 让三星 PMS 接受注册。全部文件在设备 `/data/adb/modules/s23_keyboardoverlay/`（仅作存储，越狱模式 KernelSU 不会自动挂载模块）。
 
 四个 overlay 包（源码在同名目录，编译产物在 `dist/`）：
 
@@ -35,11 +35,12 @@
 6. **目录可执行位**：`/product/overlay` 下的 overlay 很多在**子目录**里（如 NavigationBarModeGestural/）。对合并目录递归 `chmod -R 644` 会把目录的 +x 剥掉，非 root 进程无法穿越目录 → 子目录里的 overlay 全部静默消失（症状：只有顶层 APK 注册成功）。必须目录 755 / 文件 644，用 `find -type d/-type f` 分开处理。
 7. **toybox 不是 GNU coreutils**：Android 上的 `head` 不支持 `-n -1`（删最后一行），要用 `sed '$d'`。写错会把白名单 XML 截断成残件，PMS 读到残件会引发整机重启（本方案因此自我验证过：挂载不持久，崩了自动回原生，无变砖风险）。
 8. **生效方式**：静态 overlay 由 PackageManager 在 system_server 启动时扫描注册，所以每次改完需要热重启：`su -c 'setprop ctl.restart zygote'`（不需要完整重启）。另外 overlay 包一旦在某次开机时"不存在"，OMS 会把它在 overlays.xml 里的启用状态清掉，所以 service.sh 里要幂等地 `cmd overlay enable` 自愈。
+9. **Windows 上打 zip 别用 PowerShell `Compress-Archive`**：它会把 zip 条目路径写成反斜杠 `\`，Android 的解压器不认，目录塌成 `files\KbdOverlay\KbdOverlay.apk` 这样的字面文件名。本仓库用 python 的 zipfile 打包并显式替换分隔符。
 
 ## 设备端部署结构
 
 ```
-/data/adb/modules/keyboardoverlay/               # 标准 KernelSU 模块
+/data/adb/modules/s23_keyboardoverlay/               # 标准 KernelSU 模块
 ├── module.prop                                  # 模块元信息
 ├── service.sh                                   # 三条 mount --bind + 自愈（enable gestural overlay、隐藏手势提示设置）；获取 root 后由 KSU 自动执行
 ├── product_overlay/                             # /product/overlay 的完整合并副本，bind mount 到 /product/overlay
@@ -52,26 +53,29 @@
 └── allowed-system-preload-apps.xml              # bind mount 到 /system/etc/sysconfig/ 同名文件
 ```
 
-## 一键构建与部署
+## 构建与安装
 
 ```bash
-./build.sh     # 编译 4 个 overlay -> dist/，组装 module/ 并打包 keyboardoverlay-module.zip
-./deploy.sh    # 推送到手机并安装（需 adb 连接 + 已手动获取 root），装完自动热重启
+./build.sh     # 编译 4 个 overlay -> dist/，组装 module/ 并打包 s23_keyboardoverlay.zip
+./deploy.sh    # 方式一：adb 推送到手机并安装（需 adb 连接 + 已手动获取 root），装完自动热重启
 ```
+
+方式二：把 `s23_keyboardoverlay.zip` 传到手机，在 KernelSU 管理器里直接刷入——zip 是自安装模块（含 `customize.sh`），刷入时自动完成合并目录和白名单补丁。
 
 仓库结构：
 
 ```
-build.sh           # PC 端：一键编译 + 打包
+build.sh           # PC 端：一键编译 + 打包（用 python 打 zip，见坑 #9）
 deploy.sh          # PC 端：adb 推送 + 调用设备端安装器（不进模块包）
 deploy-device.sh   # 设备端安装器，由 deploy.sh 推送到 /data/local/tmp 执行（不进模块包）
-module/            # 纯模块包：module.prop + service.sh + files/（就是 zip 的内容）
+customize.sh       # 刷入时由 KSU/Magisk 安装器执行的安装脚本（打进模块包，与 deploy-device.sh 同逻辑）
+module/            # 纯模块包：module.prop + service.sh + customize.sh + files/（就是 zip 的内容）
 kbd/ pill/ gestural/ gestural_nohint/   # 四个 overlay 的源码
 dist/              # 编译产物
 ```
 
 - `build.sh`：aapt2 编译 + zipalign + apksigner（密钥 `overlay.jks`，没有会自动生成），可用 `SDK_DIR` 环境变量覆盖 SDK 路径
-- `deploy-device.sh`（设备端）：卸载旧挂载 → 从当前系统重新复制 `/product/overlay` 生成合并目录（OTA 后也安全）→ 安装 4 个 APK → 动态给两个白名单 XML 打补丁（幂等，基于设备当前文件生成，不会用过期副本）→ 安装 `module.prop` / `service.sh` → 修 SELinux 上下文和权限 → 本次手动执行一次 `service.sh` 并热重启立即可见效果
+- `deploy-device.sh` / `customize.sh`：卸载旧挂载 → 从当前系统重新复制 `/product/overlay` 生成合并目录（OTA 后也安全）→ 安装 4 个 APK → 动态给两个白名单 XML 打补丁（幂等，基于设备当前文件生成，不会用过期副本）→ 修 SELinux 上下文和权限。deploy.sh 路线会额外当场执行一次 `service.sh` 并热重启立即可见效果
 
 ## 每次完全重启后
 
@@ -108,14 +112,14 @@ $BT/apksigner.bat sign --ks overlay.jks --ks-pass pass:android \
 ```bash
 adb push dist/GesturalOverlay.apk //data/local/tmp/
 adb shell "su -c '
-cp /data/local/tmp/GesturalOverlay.apk /data/adb/modules/keyboardoverlay/product_overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
-chcon u:object_r:system_file:s0 /data/adb/modules/keyboardoverlay/product_overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+cp /data/local/tmp/GesturalOverlay.apk /data/adb/modules/s23_keyboardoverlay/product_overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+chcon u:object_r:system_file:s0 /data/adb/modules/s23_keyboardoverlay/product_overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
 setprop ctl.restart zygote'"
 ```
 
 ## 卸载 / 回滚
 
-重启手机即可完全恢复原样（bind mount 不持久）。想永久移除：删掉 `/data/adb/modules/keyboardoverlay/`，并恢复手势提示设置 `settings put global navigation_bar_gesture_hint 1`。
+重启手机即可完全恢复原样（bind mount 不持久）。想永久移除：删掉 `/data/adb/modules/s23_keyboardoverlay/`，并恢复手势提示设置 `settings put global navigation_bar_gesture_hint 1`。
 
 ## 备注
 
