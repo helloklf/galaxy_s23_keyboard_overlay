@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.android.internal.systemui.navbar.gestural"
+    android:versionCode="1" android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36"/>
+    <overlay android:targetPackage="android"
+        android:category="com.android.internal.navigation_bar_mode"
+        android:isStatic="true"
+        android:priority="1"/>
+    <application android:hasCode="false" android:label="@string/navigation_bar_mode_title"/>
+</manifest>

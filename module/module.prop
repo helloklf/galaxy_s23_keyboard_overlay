@@ -1,0 +1,6 @@
+id=keyboardoverlay
+name=KeyboardOverlay - IME bottom & gesture hint remover
+version=v1.1
+versionCode=2
+author=kimi
+description=Removes IME bottom spacing and hides gesture hint bar via RRO overlays (bind-mount edition for jailbreak-mode KernelSU)
